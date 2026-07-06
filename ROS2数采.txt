@@ -1,1 +1,35 @@
+https://blog.csdn.net/weixin_29294395/article/details/158795261
+我会通过一个模拟的移动机器人场景，带你从零开始，记录激光雷达、IMU和里程计数据，分析其发布频率和带宽，并最终实现数据的离线回放与可视化验证。
+整个过程，你会看到命令行如何成为你调试机器人、优化算法、复现问题的“瑞士军刀”。
+1. 构建数据采集实验环境
+在开始数据采集之前，一个结构清晰、依赖明确的工作空间是必不可少的。虽然你可能已经创建过工作空间，但为了数据采集的完整性和可复现性，我们需要一个包含数据发布节点的定制化环境。
 
+1.1 创建专用的数据采集工作空间
+首先，我们创建一个独立的工作空间，避免与现有项目 冲突。我习惯将所有实验性项目放在~/ros2_labs目录
+mkdir -p ~/ros2_labs/data_acquisition_ws/src
+cd ~/ros2_labs/data_acquisition_ws/src
+接下来，我们需要一个能够模拟发布多种传感器数据的Package 。这里，我们不从零开始写C++或Python节点，而是利用ROS2提供的demo_nodes_cpp包，它内置了多种数据发布器，非常适合我们的教学场景。同时，我们也会创建一个简单的自定义包，用于后续扩展。
+    # 从ROS2仓库克隆示例包（以Humble版本为例）
+    git clone -b humble https://github.com/ros2/demos.git
+    # 进入工作空间根目录编译
+    cd ~/ros2_labs/data_acquisition_ws
+    colcon build --packages-select demo_nodes_cpp
+编译成功后，别忘记source环境，这是很多初学者容易遗漏导致命令找不到的关键一步
+    source install/setup.bash
+1.2 启动模拟数据发布节点
+现在，让我们启动几个模拟传感器和状态的发布者。我们将同时运行三个节点：
+    模拟激光雷达扫描：发布sensor_msgs/msg/LaserScan类型的话题。
+    模拟惯性测量单元：发布sensor_msgs/msg/Imu类型的话题。
+    模拟机器人里程计：发布nav_msgs/msg/Odometry类型的话题。
+打开第一个终端，运行以下命令：
+  # 终端1：发布激光雷达数据
+  ros2 run demo_nodes_cpp talker --ros-args -r chatter:=/scan -p message_type:=sensor_msgs/msg/LaserScan
+这里使用了--ros-args进行话题重映射（-r），将默认的chatter话题重映射到机器人领域标准的/scan话题。-p参数则指定了发布的消息类型。
+打开第二个终端，同样source环境后运行：
+  # 终端2：发布IMU数据
+  ros2 run demo_nodes_cpp talker --ros-args -r chatter:=/imu/data -p message_type:=sensor_msgs/msg/Imu
+打开第三个终端：
+  # 终端3：发布里程计数据
+  ros2 run demo_nodes_cpp talker --ros-args -r chatter:=/odom -p message_type:=nav_msgs/msg/Odometry
+现在，你的系统里应该有三个节点在持续发布数据。我们可以快速验证一下：
+  ros2 topic l
