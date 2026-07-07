@@ -1,3 +1,96 @@
+ROS 2 DDS底层架构与实时调度原理
+2.1 ROS 2 的通信核心依赖于 DDS（Data Distribution Service），其作为中间件提供去中心化的数据分发能力。DDS 采用发布-订阅模型，通过主题（Topic）实现节点间解耦通信。
+    DDS 实体交互结构
+    在运行时，ROS 2 节点创建对应的 DDS 实体：DomainParticipant 管理通信域，Publisher 和 Subscriber 控制数据流方向，DataReader 与 DataWriter 执行实际数据收发。
+        // 创建 QoS 配置
+        rclcpp::QoS qos(10);
+        qos.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE);
+        qos.durability(RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL);
+    上述代码设置可靠传输与持久化策略，确保关键数据在 late-joining 节点加入后仍可接收历史消息。
+    实时调度集成
+    ROS 2 支持与操作系统调度器协同，通过 rclcpp::executors 将回调绑定至特定线程优先级，结合 DDS 提供的 deadline 与 lifespan QoS 策略，保障实时性需求。
+        QoS 策略	作用
+        Reliability	控制数据交付保证级别
+        Durability	管理数据生命周期与初始化同步
+        Deadline	定义数据更新频率约束
+2.2 C++与Python节点间通信的性能瓶颈分析
+在异构系统中，C++与Python节点常通过ROS等中间件进行通信，但跨语言数据交换易成为性能瓶颈。
+    序列化开销
+        数据在传输前需序列化为字节流，高频率通信时CPU消耗显著。以ROS消息为例：
+            std_msgs::String msg;
+            msg.data = "sensor_data";
+            publisher.publish(msg);
+        该过程涉及内存拷贝与类型编码，频繁调用将引发延迟累积。
+    通信机制对比
+        共享内存：低延迟，但需手动同步
+        Socket通信：跨平台兼容性好，但上下文切换开销大
+        ROS话题：抽象层级高，调试方便，但吞吐受限于中间件调度
+    典型场景性能数据
+        通信方式	平均延迟(ms)	带宽(MB/s)
+        ROS Topic	8.2	15.3
+        ZeroMQ	2.1	89.7
+        Shared Memory	0.3	320.0
+2.3 QoS策略配置对数据延迟的影响实践
+在网络设备中，QoS（服务质量）策略直接影响数据包的调度优先级与传输延迟。合理配置可显著降低关键业务的端到端延迟。
+    典型QoS分类与标记
+    通过DSCP值对流量进行分类是常见做法：
+        class-map VOICE
+         match dscp ef
+        class-map VIDEO
+         match dscp af41
+        class-map DATA
+         match dscp default
+    上述配置将语音、视频和普通数据流分别归类，便于后续差异化调度处理。
+    队列调度策略对比
+    策略	延迟表现	适用场景
+    PQ（优先级队列）	低	实时语音
+    WFQ（加权公平队列）	中等	混合业务
+2.4 多线程与单线程执行器在实时系统中的应用对比
+在实时系统中，任务执行的确定性与时序可控性至关重要。多线程执行器通过并发处理提升吞吐量，适用于I/O密集型任务；而单线程执行器如事件循环模型，避免了锁竞争与上下文切换开销，更适合高确定性场景。
+性能特征对比
+    多线程：高并发但存在调度延迟
+    单线程：低延迟、可预测性强
+典型代码结构
+2.5 基于Timer与Callback的精确数据同步实现
+数据同步机制
+在分布式系统中，确保各节点间数据一致性是关键挑战。通过定时器（Timer）触发周期性任务，并结合回调函数（Callback）处理响应，可实现高精度的数据同步。
+核心实现代码
+timer := time.NewTicker(5 * time.Second)
+go func() {
+    for range timer.C {
+        syncData(func(success bool) {
+            if success {
+                log.Println("Data sync completed")
+            }
+        })
+    }
+}()
+上述代码每5秒执行一次syncData同步操作，回调函数用于接收同步结果状态，提升异步处理效率。
+优势分析
+    Timer提供稳定的时间基准，保障同步频率可控
+    Callback解耦执行与结果处理逻辑，增强系统可维护性
+高性能通信模式设计与选型:
+    纯C++核心处理+Python监控可视化联动
+    共享内存辅助的跨语言数据零拷贝传输
+    基于自定义消息类型的高效序列化通信
+在分布式系统中，通信效率直接影响整体性能。通过定义紧凑且语义明确的自定义消息类型，结合高效的序列化协议，可显著降低网络开销与解析延迟。
+采用 Protocol Buffers 定义消息格式，确保跨语言兼容性与高序列化速度：
+    message DataPacket {
+      required int64 timestamp = 1;
+      optional string source_id = 2;
+      repeated float values = 3 [packed=true];
+    }
+该结构通过 packed=true 启用数值数组的紧凑编码，减少传输体积；required 字段保障关键数据完整性。
+序列化性能对比
+    序列化方式	平均大小 (KB)	编码耗时 (μs)
+    JSON	4.2	120
+    Protobuf	1.8	45
+结果表明，Protobuf 在体积和速度上均优于传统文本格式，尤其适用于高频数据同步场景。
+
+原文链接：https://blog.csdn.net/FastProceed/article/details/154879017
+
+
+
 https://blog.csdn.net/SimProceed/article/details/155229578
 第一章：自动驾驶系统的实时数据处理管道概述
 自动驾驶系统依赖于高吞吐、低延迟的数据处理能力，以实现对环境的实时感知与决策。传感器阵列（如激光雷达、摄像头、毫米波雷达）持续生成海量原始数据，这些数据必须在毫秒级时间内完成采集、融合、分析和响应。为此，构建一个高效、可扩展的实时数据处理管道至关重要。
