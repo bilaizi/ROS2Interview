@@ -1,3 +1,4 @@
+https://blog.csdn.net/SimProceed/article/details/155229578
 实时性瓶颈分析
   中间件序列化开销影响响应延迟
   默认Best-Effort QoS可能导致消息丢失
