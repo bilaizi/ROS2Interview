@@ -1,0 +1,23 @@
+adb root
+adb connect
+fastboot oem unlock
+
+刷机：
+adb shell setprop persist.soc_heartbeat_switch false
+adb reboot
+adb shell getprop persist.soc_heartbeat_switch
+adb shell reboot bootloader
+fastboot devices
+fastboot  reboot
+adb push  XXXX /soc/
+adb pull /soc/ .
+git checkout -b XXXX
+git add XXXX
+git commit -m "xrec runtime pcap catch"
+git push -f origin xrec_pacp_catch
+git push -f origin bugfix
+git commit --amend
+git commit --amend --no-edit
+git commit --amend -m "feature: xrec runtime pcap catch"
+git commit -m "feature: xrec runtime pcap catch"
+git push -f origin xrec_pcap_catch
