@@ -87,6 +87,48 @@ go func() {
     Protobuf	1.8	45
 结果表明，Protobuf 在体积和速度上均优于传统文本格式，尤其适用于高频数据同步场景。
 
+混合架构设计
+系统前端使用C++处理高频率点云数据，后端逻辑（如任务调度、可视化）由Python管理，形成“计算-控制”分层架构。
+    #include <pybind11/pybind11.h>
+    #include <pcl/filters/voxel_grid.h>
+    void voxel_filter(pcl::PointCloud<PointXYZ>& cloud) {
+        pcl::VoxelGrid<PointXYZ> vg;
+        vg.setLeafSize(0.1f, 0.1f, 0.1f);
+        vg.setInputCloud(cloud.makeShared());
+        vg.filter(cloud);
+    }
+    PYBIND11_MODULE(pointcloud_cpp, m) {
+        m.def("voxel_filter", &voxel_filter);
+    }
+上述代码将PCL体素滤波封装为Python可用函数，setLeafSize控制分辨率，实现降采样加速。
+性能对比
+    方法	处理时延(ms)	内存占用(MB)
+    纯Python	210	850
+    C++加速	65	520
+4.2 控制指令回路中低延迟发布/订阅优化方案
+在实时控制系统中，发布/订阅架构的延迟直接影响指令响应速度。为降低通信延迟，采用零拷贝共享内存机制与事件驱动调度结合的方式，提升数据流转效率。
+核心优化策略
+    使用内存映射（mmap）实现进程间零拷贝数据共享
+    基于 epoll 的异步事件通知机制，减少轮询开销
+    优先级队列保障关键控制指令的即时处理
+高性能发布者示例
+class LowLatencyPublisher {
+  int* shared_buffer;
+  std::atomic<bool> data_ready{false};
+public:
+  void publish(const int& cmd) {
+    *shared_buffer = cmd;           // 零拷贝写入
+    data_ready.store(true);         // 原子标志置位
+    event_notify();                 // 触发事件通知
+  }
+};
+AI写代码
+
+上述代码通过原子标志与内存屏障确保数据一致性，event_notify()调用底层 epoll 机制唤醒订阅者，避免轮询延迟。
+性能对比
+方案	平均延迟(μs)	抖动(μs)
+TCP Pub/Sub	85	12
+共享内存+事件驱动	18	3
 原文链接：https://blog.csdn.net/FastProceed/article/details/154879017
 
 
