@@ -88,7 +88,7 @@ go func() {
 结果表明，Protobuf 在体积和速度上均优于传统文本格式，尤其适用于高频数据同步场景。
 
 混合架构设计
-系统前端使用C++处理高频率点云数据，后端逻辑（如任务调度、可视化）由Python管理，形成“计算-控制”分层架构。
+系统后端使用C++处理高频率点云数据，前端逻辑（如任务调度、可视化）由Python管理，形成“计算-控制”分层架构。
     #include <pybind11/pybind11.h>
     #include <pcl/filters/voxel_grid.h>
     void voxel_filter(pcl::PointCloud<PointXYZ>& cloud) {
