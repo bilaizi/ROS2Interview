@@ -1,0 +1,87 @@
+6.4 通信模式选择策略
+6.4.1 模式对比矩阵
+特性	     话题	         服务	          动作	       参数
+通信模式	 异步多对多	     同步一对一	   异步+反馈	     键值存储
+数据流向	  单向	          双向	       双向+状态	     双向
+适用频率	  高频(>100Hz)	  低频(<10Hz)	 长任务	       配置更新
+缓冲支持	   是	            否	         部分	          否
+QoS配置	   完整	          有限	       混合	          无
+典型延迟	    <1ms	        1-10ms	     可变	       10-100ms
+6.4.2 选择决策树
+需要通信？
+    ├─ 是周期性数据流？
+    │  ├─ 是 → 使用话题
+    │  │  ├─ 需要可靠传输？→ RELIABLE QoS
+    │  │  └─ 容忍丢包？→ BEST_EFFORT QoS
+    │  └─ 否
+    │     ├─ 是请求-响应？
+    │     │  ├─ 需要快速响应？→ 服务
+    │     │  └─ 长时间任务？→ 动作
+    │     └─ 是配置数据？→ 参数
+6.4.3 性能考量
+通信开销分析（基于 1KB 消息）：
+话题（局域网）：
+- 建立连接：~10ms (仅首次)
+- 单次传输：~0.1-0.5ms
+- 吞吐量：>10000 msg/s
+
+服务（局域网）：
+- 建立连接：~10ms
+- 请求-响应：~1-5ms
+- 吞吐量：~200 calls/s
+
+动作（局域网）：
+- 目标发送：~5ms
+- 反馈更新：~0.5ms/次
+- 结果获取：~5ms
+6.5 QoS 策略详解
+6.5.1 QoS 配置维度
+ROS2 提供 10 个 QoS 策略维度：
+History（历史策略）
+    KEEP_LAST(n)：保留最新 n 个样本
+    KEEP_ALL：保留所有样本（受 Resource Limits 限制）
+Reliability（可靠性）
+    RELIABLE：确保传输，重传丢失数据
+    BEST_EFFORT：尽力传输，不重传
+Durability（持久性）
+    VOLATILE：不保存历史数据
+    TRANSIENT_LOCAL：保存发布者历史
+    TRANSIENT：保存到持久存储
+    PERSISTENT：持久化到磁盘
+Deadline（截止时间）
+    设置消息更新周期承诺
+    违反触发 deadline missed 事件
+Lifespan（生命周期）
+    消息有效期，过期自动丢弃
+Liveliness（活跃性）
+    AUTOMATIC：DDS 自动维护
+    MANUAL_BY_TOPIC：应用层维护
+    MANUAL_BY_NODE：节点级维护
+6.5.2 预定义 QoS 配置
+ROS2 提供常用配置模板：
+传感器数据（SensorDataQoS）：
+    - History: KEEP_LAST(5)
+    - Reliability: BEST_EFFORT
+    - Durability: VOLATILE
+参数（ParameterQoS）：
+    - History: KEEP_LAST(1000)
+    - Reliability: RELIABLE
+    - Durability: VOLATILE
+服务（ServicesQoS）：
+    - History: KEEP_LAST(10)
+    - Reliability: RELIABLE
+    - Durability: VOLATILE
+系统默认（SystemDefaultQoS）：
+    - History: KEEP_LAST(10)
+    - Reliability: RELIABLE
+    - Durability: VOLATILE
+6.5.3 QoS 兼容性规则
+发布者和订阅者 QoS 必须兼容：
+  Policy	Publisher	Subscriber	Compatible
+  Reliability	BEST_EFFORT	BEST_EFFORT	✓
+  Reliability	BEST_EFFORT	RELIABLE	✗
+  Reliability	RELIABLE	BEST_EFFORT	✓
+  Reliability	RELIABLE	RELIABLE	✓
+  Durability	VOLATILE	VOLATILE	✓
+  Durability	VOLATILE	TRANSIENT_LOCAL	✗
+  Durability	TRANSIENT_LOCAL	VOLATILE	✓
